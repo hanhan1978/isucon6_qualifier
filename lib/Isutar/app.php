@@ -6,8 +6,14 @@ use Slim\Http\Response;
 use PDO;
 use PDOWrapper;
 
+/*
+ini_set('log_errors','On');
+ini_set('error_log','/tmp/php_error_isutar.log');
+*/
+
 $container = new class extends \Slim\Container {
     public $dbh;
+    public $db_isuda;
     public function __construct() {
         parent::__construct();
 
@@ -17,6 +23,15 @@ $container = new class extends \Slim\Container {
             $_ENV['ISUTAR_DB_PASSWORD'] ?? 'isucon',
             [ PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4" ]
         ));
+
+        $this->db_isuda = new PDOWrapper(new PDO(
+            $_ENV['ISUDA_DSN'],
+            'isucon',
+            'isucon',
+            [ PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4" ]
+        ));
+ 
+
     }
 };
 $app = new \Slim\App($container);
@@ -41,12 +56,11 @@ $app->get('/stars', function (Request $req, Response $c) {
 $app->post('/stars', function (Request $req, Response $c) {
     $keyword = $req->getParams()['keyword'];
 
-    $origin = $_ENV['ISUDA_ORIGIN'] ?? 'http://localhost:5000';
-    $url = "$origin/keyword/" . rawurlencode($keyword);
-    $ua = new \GuzzleHttp\Client;
-    try {
-        $res = $ua->request('GET', $url)->getBody();
-    } catch (\Exception $e) {
+    $data = $this->db_isuda->select_all(
+        'SELECT id FROM entry WHERE keyword = ?'
+        , $keyword
+    );
+    if (empty($data)) {
         return $c->withStatus(404);
     }
 
