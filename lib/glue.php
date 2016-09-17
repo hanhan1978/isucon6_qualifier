@@ -61,3 +61,9 @@ function render_json(\Slim\Http\Response $r, $object) {
   $r->getBody()->write(json_encode($object));
   return $r;
 }
+
+function info($title, $content){
+    error_log("------- $title [START] -------");
+    error_log($content);
+    error_log("------- $title [END] -------");
+}
