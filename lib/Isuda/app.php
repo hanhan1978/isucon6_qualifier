@@ -78,7 +78,7 @@ $container = new class extends \Slim\Container {
     public function load_stars($keyword) {
         $keyword = urldecode($keyword);
         $db_data = $this->db_star->select_all(
-            'SELECT * FROM star WHERE keyword = ?'
+            'SELECT user_name FROM star WHERE keyword = ?'
             , $keyword
         );
         return $db_data;
@@ -136,7 +136,7 @@ $app->get('/', function (Request $req, Response $c) {
 
     $offset = $PER_PAGE * ($page-1);
     $entries = $this->dbh->select_all(
-        'SELECT * FROM entry '.
+        'SELECT description, keyword FROM entry '.
         'ORDER BY updated_at DESC '.
         "LIMIT $PER_PAGE ".
         "OFFSET $offset"
@@ -218,7 +218,7 @@ $app->get('/login', function (Request $req, Response $c) {
 $app->post('/login', function (Request $req, Response $c) {
     $name = $req->getParsedBody()['name'];
     $row = $this->dbh->select_row(
-        'SELECT * FROM user'
+        'SELECT id, salt, password FROM user'
         . ' WHERE name = ?'
     , $name);
     if (!$row || $row['password'] !== sha1($row['salt'].$req->getParsedBody()['password'])) {
@@ -244,7 +244,7 @@ $app->get('/keyword/{keyword}', function (Request $req, Response $c) {
     if ($keyword === null) return $c->withStatus(400);
 
     $entry = $this->dbh->select_row(
-        'SELECT * FROM entry'
+        'SELECT description, keyword FROM entry'
         .' WHERE keyword = ?'
     , $keyword);
     if (empty($entry)) return $c->withStatus(404);
@@ -263,7 +263,7 @@ $app->post('/keyword/{keyword}', function (Request $req, Response $c) {
     if ($delete === null) return $c->withStatus(400);
 
     $entry = $this->dbh->select_row(
-        'SELECT * FROM entry'
+        'SELECT id FROM entry'
         .' WHERE keyword = ?'
     , $keyword);
     if (empty($entry)) return $c->withStatus(404);
