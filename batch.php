@@ -25,6 +25,28 @@ $r = $stmt2->fetch(PDO::FETCH_ASSOC);
 
 $redis->set('entry_count', $r['count']);
 
+
+
+
+$stmt3 = $pdo->query("SELECT keyword, description FROM entry");
+$keywords = $redis->zRevRange('zkeywords', 0, -1);
+
+while($t = $stmt3->fetch(PDO::FETCH_ASSOC)){
+    $kw2sha = [];
+    for ($i = 0; !empty($kwtmp = array_slice($keywords, 500 * $i, 500)); $i++) {
+        $re = implode('|', array_map(function ($keyword) { return quotemeta($keyword); }, $kwtmp));
+        preg_replace_callback("/($re)/", function ($m) use (&$kw2sha) {
+            $kw = $m[1];
+            return $kw2sha[] = $kw;
+        }, $t['description']);
+    }
+    foreach($kw2sha as $kw){
+      $redis->zAdd('zkey_'.urlencode($t['keyword']), mb_strlen($kw), $kw);
+    }
+}
+
+
+
 function get_db(){
   $host = '127.0.0.1';
   $dbname = 'isuda';

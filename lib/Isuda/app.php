@@ -9,6 +9,7 @@ use PDOWrapper;
 $redis = new \Redis();
 $redis->connect('127.0.0.1', 6379);
 
+//require_once 'isucon_lib/profiler/main.php';
 //ini_set('log_errors','On');
 //ini_set('error_log','/tmp/error_isuda.log');
 
@@ -53,14 +54,22 @@ $container = new class extends \Slim\Container {
 
     }
 
-    public function htmlify($content, $keywords) {
+    public function htmlify($content, $keyword) {
         if (!isset($content)) {
             return '';
         }
         $kw2sha = [];
+        
+        global $redis;
+        $added = $redis->sMembers('hky_added');
+        foreach($added as $k){
+            $redis->zAdd('zkey_'.urlencode($keyword), mb_strlen($k), $k);
+        }
+        $keywords = $redis->zRevRange('zkey_'.urlencode($keyword), 0, -1);
 
         // NOTE: avoid pcre limitation "regular expression is too large at offset"
-        for ($i = 0; !empty($kwtmp = array_slice($keywords, 500 * $i, 500)); $i++) {
+        $limit = 500;
+        for ($i = 0; !empty($kwtmp = array_slice($keywords, $limit * $i, $limit)); $i++) {
             $re = implode('|', array_map(function ($keyword) { return quotemeta($keyword); }, $kwtmp));
             preg_replace_callback("/($re)/", function ($m) use (&$kw2sha) {
                 $kw = $m[1];
@@ -146,13 +155,13 @@ $app->get('/', function (Request $req, Response $c) {
         "LIMIT $PER_PAGE ".
         "OFFSET $offset"
     );
-    global $redis;
-    $keywords = $redis->zRevRange('zkeywords', 0, -1);
     foreach ($entries as &$entry) {
-        $entry['html']  = $this->htmlify($entry['description'], $keywords);
+        $entry['html']  = $this->htmlify($entry['description'], $entry['keyword']);
         $entry['stars'] = $this->load_stars($entry['keyword']);
     }
     unset($entry);
+
+    global $redis;
 
     $total_entries = $redis->get('entry_count');
     $last_page = ceil($total_entries / $PER_PAGE);
@@ -185,6 +194,7 @@ $app->post('/keyword', function (Request $req, Response $c) {
 
     global $redis;
     $redis->zAdd('zkeywords', mb_strlen($keyword), $keyword);
+    $redis->sAdd('hky_added', $keyword);
     $redis->incr('entry_count');
 
     return $c->withRedirect('/');
@@ -257,9 +267,7 @@ $app->get('/keyword/{keyword}', function (Request $req, Response $c) {
         .' WHERE keyword = ?'
     , $keyword);
     if (empty($entry)) return $c->withStatus(404);
-    global $redis;
-    $keywords = $redis->zRevRange('zkeywords', 0, -1);
-    $entry['html'] = $this->htmlify($entry['description'], $keywords);
+    $entry['html'] = $this->htmlify($entry['description'], $entry['keyword']);
     $entry['stars'] = $this->load_stars($entry['keyword']);
 
     return $this->view->render($c, 'keyword.twig', [
@@ -282,6 +290,7 @@ $app->post('/keyword/{keyword}', function (Request $req, Response $c) {
     $this->dbh->query('DELETE FROM entry WHERE keyword = ?', $keyword);
     global $redis;
     $redis->zDelete('zkeywords', $keyword);
+    $redis->sRem('hky_added', $keyword);
     $redis->decr('entry_count');
     return $c->withRedirect('/');
 })->add($mw['authenticate'])->add($mw['set_name']);
