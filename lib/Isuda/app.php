@@ -6,6 +6,12 @@ use Slim\Http\Response;
 use PDO;
 use PDOWrapper;
 
+$redis = new \Redis();
+$redis->connect('127.0.0.1', 6379);
+
+//ini_set('log_errors','On');
+//ini_set('error_log','/tmp/error_isuda.log');
+
 function config($key) {
     static $conf;
     if ($conf === null) {
@@ -51,14 +57,13 @@ $container = new class extends \Slim\Container {
         if (!isset($content)) {
             return '';
         }
-        $keywords = $this->dbh->select_all(
-            'SELECT keyword FROM entry ORDER BY CHARACTER_LENGTH(keyword) DESC'
-        );
+        global $redis;
+        $keywords = $redis->zRevRange('zkeywords', 0, -1);
         $kw2sha = [];
 
         // NOTE: avoid pcre limitation "regular expression is too large at offset"
         for ($i = 0; !empty($kwtmp = array_slice($keywords, 500 * $i, 500)); $i++) {
-            $re = implode('|', array_map(function ($keyword) { return quotemeta($keyword['keyword']); }, $kwtmp));
+            $re = implode('|', array_map(function ($keyword) { return quotemeta($keyword); }, $kwtmp));
             preg_replace_callback("/($re)/", function ($m) use (&$kw2sha) {
                 $kw = $m[1];
                 return $kw2sha[$kw] = "isuda_" . sha1($kw);
@@ -122,6 +127,8 @@ $app->get('/initialize', function (Request $req, Response $c) {
     $this->dbh->query(
         'DELETE FROM entry WHERE id > 7101'
     );
+    exec('/home/isucon/webapp/php/load_redisdata.sh 2>&1');
+
     $origin = config('isutar_origin');
     $url = "$origin/initialize";
     file_get_contents($url);
@@ -177,6 +184,9 @@ $app->post('/keyword', function (Request $req, Response $c) {
         .' ON DUPLICATE KEY UPDATE'
         .' author_id = ?, keyword = ?, description = ?, updated_at = NOW()'
     , $user_id, $keyword, $description, $user_id, $keyword, $description);
+
+    global $redis;
+    $redis->zAdd('zkeywords', mb_strlen($keyword), $keyword);
 
     return $c->withRedirect('/');
 })->add($mw['authenticate'])->add($mw['set_name']);
@@ -257,7 +267,7 @@ $app->get('/keyword/{keyword}', function (Request $req, Response $c) {
 })->add($mw['set_name']);
 
 $app->post('/keyword/{keyword}', function (Request $req, Response $c) {
-    $keyword = $req->getParsedBody()['keyword'];
+    $keyword = $req->getAttribute('keyword');
     if ($keyword === null) return $c->withStatus(400);
     $delete = $req->getParsedBody()['delete'];
     if ($delete === null) return $c->withStatus(400);
@@ -269,8 +279,10 @@ $app->post('/keyword/{keyword}', function (Request $req, Response $c) {
     if (empty($entry)) return $c->withStatus(404);
 
     $this->dbh->query('DELETE FROM entry WHERE keyword = ?', $keyword);
+    global $redis;
+    $redis->zDelete('zkeywords', $keyword);
     return $c->withRedirect('/');
-})->add('authenticate')->add($mw['set_name']);
+})->add($mw['authenticate'])->add($mw['set_name']);
 
 function is_spam_contents($content) {
     $ua = new \GuzzleHttp\Client;
