@@ -263,7 +263,7 @@ $app->post('/keyword/{keyword}', function (Request $req, Response $c) {
     if ($delete === null) return $c->withStatus(400);
 
     $entry = $this->dbh->select_row(
-        'SELECT * FROM entry'
+        'SELECT id FROM entry'
         .' WHERE keyword = ?'
     , $keyword);
     if (empty($entry)) return $c->withStatus(404);
