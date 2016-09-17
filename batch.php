@@ -20,7 +20,10 @@ while($u = $stmt->fetch(PDO::FETCH_ASSOC)){
 $zkeys = $redis->zRevRange('zkeywords', 0, -1);
 
 
+$stmt2 = $pdo->query("SELECT count(*) as count FROM entry");
+$r = $stmt2->fetch(PDO::FETCH_ASSOC);
 
+$redis->set('entry_count', $r['count']);
 
 function get_db(){
   $host = '127.0.0.1';

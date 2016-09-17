@@ -53,12 +53,10 @@ $container = new class extends \Slim\Container {
 
     }
 
-    public function htmlify($content) {
+    public function htmlify($content, $keywords) {
         if (!isset($content)) {
             return '';
         }
-        global $redis;
-        $keywords = $redis->zRevRange('zkeywords', 0, -1);
         $kw2sha = [];
 
         // NOTE: avoid pcre limitation "regular expression is too large at offset"
@@ -148,15 +146,15 @@ $app->get('/', function (Request $req, Response $c) {
         "LIMIT $PER_PAGE ".
         "OFFSET $offset"
     );
+    global $redis;
+    $keywords = $redis->zRevRange('zkeywords', 0, -1);
     foreach ($entries as &$entry) {
-        $entry['html']  = $this->htmlify($entry['description']);
+        $entry['html']  = $this->htmlify($entry['description'], $keywords);
         $entry['stars'] = $this->load_stars($entry['keyword']);
     }
     unset($entry);
 
-    $total_entries = $this->dbh->select_one(
-        'SELECT COUNT(*) FROM entry'
-    );
+    $total_entries = $redis->get('entry_count');
     $last_page = ceil($total_entries / $PER_PAGE);
     $pages = range(max(1, $page-5), min($last_page, $page+5));
 
@@ -187,6 +185,7 @@ $app->post('/keyword', function (Request $req, Response $c) {
 
     global $redis;
     $redis->zAdd('zkeywords', mb_strlen($keyword), $keyword);
+    $redis->incr('entry_count');
 
     return $c->withRedirect('/');
 })->add($mw['authenticate'])->add($mw['set_name']);
@@ -258,7 +257,9 @@ $app->get('/keyword/{keyword}', function (Request $req, Response $c) {
         .' WHERE keyword = ?'
     , $keyword);
     if (empty($entry)) return $c->withStatus(404);
-    $entry['html'] = $this->htmlify($entry['description']);
+    global $redis;
+    $keywords = $redis->zRevRange('zkeywords', 0, -1);
+    $entry['html'] = $this->htmlify($entry['description'], $keywords);
     $entry['stars'] = $this->load_stars($entry['keyword']);
 
     return $this->view->render($c, 'keyword.twig', [
@@ -281,6 +282,7 @@ $app->post('/keyword/{keyword}', function (Request $req, Response $c) {
     $this->dbh->query('DELETE FROM entry WHERE keyword = ?', $keyword);
     global $redis;
     $redis->zDelete('zkeywords', $keyword);
+    $redis->decr('entry_count');
     return $c->withRedirect('/');
 })->add($mw['authenticate'])->add($mw['set_name']);
 
