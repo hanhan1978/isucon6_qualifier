@@ -218,7 +218,7 @@ $app->get('/login', function (Request $req, Response $c) {
 $app->post('/login', function (Request $req, Response $c) {
     $name = $req->getParsedBody()['name'];
     $row = $this->dbh->select_row(
-        'SELECT * FROM user'
+        'SELECT id, salt, password FROM user'
         . ' WHERE name = ?'
     , $name);
     if (!$row || $row['password'] !== sha1($row['salt'].$req->getParsedBody()['password'])) {
