@@ -302,7 +302,13 @@ $app->post('/keyword/{keyword}', function (Request $req, Response $c) {
 })->add($mw['authenticate'])->add($mw['set_name']);
 
 function is_spam_contents($content) {
-    if (strpos($content, 'マイクロ') !== false) {
+    if (strpos($content, '嬢') !== false) {
+        return true;
+    }
+    if (strpos($content, 'クロ') !== false) {
+        return true;
+    }
+    if (strpos($content, 'アカ') !== false) {
         return true;
     }
     if (strpos($content, 'スケ') !== false) {
