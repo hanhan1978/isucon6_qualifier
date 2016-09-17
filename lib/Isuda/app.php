@@ -78,7 +78,7 @@ $container = new class extends \Slim\Container {
     public function load_stars($keyword) {
         $keyword = urldecode($keyword);
         $db_data = $this->db_star->select_all(
-            'SELECT * FROM star WHERE keyword = ?'
+            'SELECT user_name FROM star WHERE keyword = ?'
             , $keyword
         );
         return $db_data;
@@ -136,7 +136,7 @@ $app->get('/', function (Request $req, Response $c) {
 
     $offset = $PER_PAGE * ($page-1);
     $entries = $this->dbh->select_all(
-        'SELECT * FROM entry '.
+        'SELECT description, keyword FROM entry '.
         'ORDER BY updated_at DESC '.
         "LIMIT $PER_PAGE ".
         "OFFSET $offset"
