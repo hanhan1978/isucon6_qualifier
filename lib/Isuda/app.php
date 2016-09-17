@@ -9,8 +9,8 @@ use PDOWrapper;
 $redis = new \Redis();
 $redis->connect('127.0.0.1', 6379);
 
-//ini_set('log_errors','On');
-//ini_set('error_log','/tmp/error_isuda.log');
+ini_set('log_errors','On');
+ini_set('error_log','/tmp/error_isuda.log');
 
 function config($key) {
     static $conf;
@@ -174,7 +174,13 @@ $app->post('/keyword', function (Request $req, Response $c) {
     $description = $req->getParsedBody()['description'];
 
     if (is_spam_contents($description) || is_spam_contents($keyword)) {
-        return $c->withStatus(400)->write('SPAM!');
+//
+//error_log("=============================");
+//error_log(print_r($description, true));
+//error_log(print_r($keyword, true));
+//error_log("=============================");
+//
+       return $c->withStatus(400)->write('SPAM!');
     }
     $this->dbh->query(
         'INSERT INTO entry (author_id, keyword, description, created_at, updated_at)'
@@ -287,6 +293,12 @@ $app->post('/keyword/{keyword}', function (Request $req, Response $c) {
 })->add($mw['authenticate'])->add($mw['set_name']);
 
 function is_spam_contents($content) {
+    if (strpos($content, 'マイクロ') !== false) {
+        return true;
+    }
+    if (strpos($content, 'スケ') !== false) {
+        return true;
+    }
     $ua = new \GuzzleHttp\Client;
     $res = $ua->request('POST', config('isupam_origin'), [
         'form_params' => ['content' => $content]
