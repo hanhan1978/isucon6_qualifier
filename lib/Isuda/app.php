@@ -154,9 +154,8 @@ $app->get('/', function (Request $req, Response $c) {
     }
     unset($entry);
 
-    $total_entries = $this->dbh->select_one(
-        'SELECT COUNT(*) FROM entry'
-    );
+    global $redis;
+    $total_entries = $redis->get('entry_count');
     $last_page = ceil($total_entries / $PER_PAGE);
     $pages = range(max(1, $page-5), min($last_page, $page+5));
 
@@ -187,6 +186,7 @@ $app->post('/keyword', function (Request $req, Response $c) {
 
     global $redis;
     $redis->zAdd('zkeywords', mb_strlen($keyword), $keyword);
+    $redis->incr('entry_count');
 
     return $c->withRedirect('/');
 })->add($mw['authenticate'])->add($mw['set_name']);
@@ -281,6 +281,7 @@ $app->post('/keyword/{keyword}', function (Request $req, Response $c) {
     $this->dbh->query('DELETE FROM entry WHERE keyword = ?', $keyword);
     global $redis;
     $redis->zDelete('zkeywords', $keyword);
+    $redis->decr('entry_count');
     return $c->withRedirect('/');
 })->add($mw['authenticate'])->add($mw['set_name']);
 
